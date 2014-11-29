@@ -1,8 +1,6 @@
 (ns hiccup.util
   "Utility functions for Hiccup."
-  (:require [clojure.string :as str])
-  (:import java.net.URI
-           java.net.URLEncoder))
+  (require pixie.string :as str))
 
 (def ^:dynamic *html-mode* :xhtml)
 
@@ -19,48 +17,38 @@
   (^String to-str [x] "Convert a value into a string."))
 
 (extend-protocol ToString
-  clojure.lang.Keyword
+  Keyword
   (to-str [k] (name k))
-  clojure.lang.Ratio
+  Ratio
   (to-str [r] (str (float r)))
-  java.net.URI
-  (to-str [u]
-    (if (or (.getHost u)
-            (nil? (.getPath u))
-            (not (-> (.getPath u) (.startsWith "/"))))
-      (str u)
-      (let [base (str *base-url*)]
-        (if (.endsWith base "/")
-          (str (subs base 0 (dec (count base))) u)
-          (str base u)))))
-  Object
+  IObject
   (to-str [x] (str x))
-  nil
+  Nil
   (to-str [_] ""))
 
 (defn ^String as-str
   "Converts its arguments into a string using to-str."
   [& xs]
-  (apply str (map to-str xs)))
+  (apply str (map to-str (seq xs))))
 
 (defprotocol ToURI
-  (^java.net.URI to-uri [x] "Convert a value into a URI."))
+  (to-uri [x] "Convert a value into a URI."))
 
 (extend-protocol ToURI
-  java.net.URI
-  (to-uri [u] u)
+  ; java.net.URI
+  ; (to-uri [u] u)
   String
-  (to-uri [s] (URI. s)))
+  (to-uri [s] s))
 
 (defn escape-html
   "Change special characters into HTML character entities."
   [text]
-  (.. ^String (as-str text)
-    (replace "&"  "&amp;")
-    (replace "<"  "&lt;")
-    (replace ">"  "&gt;")
-    (replace "\"" "&quot;")
-    (replace "'" (if (= *html-mode* :sgml) "&#39;" "&apos;"))))
+  (-> (as-str text)
+      (str/replace "&"  "&amp;")
+      (str/replace "<"  "&lt;")
+      (str/replace ">"  "&gt;")
+      (str/replace "\"" "&quot;")
+      (str/replace "'" (if (= *html-mode* :sgml) "&#39;" "&apos;"))))
 
 (def ^:dynamic *encoding* "UTF-8")
 
@@ -75,13 +63,14 @@
 
 (extend-protocol URLEncode
   String
-  (url-encode [s] (URLEncoder/encode s *encoding*))
-  java.util.Map
+  ; FIXME: actually url-encode it
+  (url-encode [s] s)
+  IMap
   (url-encode [m]
     (str/join "&"
       (for [[k v] m]
         (str (url-encode k) "=" (url-encode v)))))
-  Object
+  IObject
   (url-encode [x] (url-encode (to-str x))))
 
 (defn url
