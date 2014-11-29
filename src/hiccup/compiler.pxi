@@ -1,7 +1,10 @@
 (ns hiccup.compiler
   "Internal functions for compilation."
-  (:use hiccup.util)
-  (:import [clojure.lang IPersistentVector ISeq Named]))
+  (use 'hiccup.util)
+  (require pixie.string :as str))
+
+(def defn- defn)
+(extend -at-end? Nil (fn [_] true))
 
 (defn- xml-mode? []
   (#{:xml :xhtml} *html-mode*))
@@ -28,11 +31,26 @@
 
 (defn- render-attr-map [attrs]
   (apply str
-    (sort (map render-attribute attrs))))
+         (map render-attribute (seq attrs))))
 
-(def ^{:doc "Regular expression that parses a CSS-style id and class from an element name."
-       :private true}
-  re-tag #"([^\s\.#]+)(?:#([^\s\.#]+))?(?:\.([^\s#]+))?")
+;; (def ^{:doc "Regular expression that parses a CSS-style id and class from an element name."
+;;        :private true}
+;;   re-tag #"([^\s\.#]+)(?:#([^\s\.#]+))?(?:\.([^\s#]+))?")
+
+; re-matches re-tag (as-str tag)
+(defn splice-tag
+  "Split a tag into id and class if present"
+  [tag]
+  (let [id-idx (str/index-of tag "#")
+        class-idx (str/index-of tag ".")
+        [tag id class] (cond
+                        (and (pos? id-idx) (pos? class-idx)) [(str/substring tag 0 id-idx)
+                                                              (str/substring tag (inc id-idx) class-idx)
+                                                              (str/substring tag (inc class-idx))]
+                        (pos? id-idx) [(str/substring tag 0 id-idx) (str/substring tag (inc id-idx)) nil]
+                        (pos? class-idx) [(str/substring tag 0 class-idx) nil (str/substring tag (inc class-idx))]
+                        :else [tag nil nil])]
+    ['_ tag id class]))
 
 (def ^{:doc "A list of elements that must be rendered without a closing tag."
        :private true}
@@ -50,16 +68,16 @@
 (defn- merge-attributes [{:keys [id class]} map-attrs]
   (->> map-attrs
        (merge (if id {:id id}))
-       (merge-with #(if %1 (str %1 " " %2) %2) (if class {:class class}))))
+))
 
 (defn normalize-element
   "Ensure an element vector is of the form [tag-name attrs content]."
   [[tag & content]]
   (when (not (or (keyword? tag) (symbol? tag) (string? tag)))
-    (throw (IllegalArgumentException. (str tag " is not a valid element name."))))
-  (let [[_ tag id class] (re-matches re-tag (as-str tag))
+    (throw (str tag " is not a valid element name.")))
+  (let [[_ tag id class] (splice-tag (as-str tag))
         tag-attrs        {:id id
-                          :class (if class (.replace ^String class "." " "))}
+                          :class (if class (str/replace class "." " "))}
         map-attrs        (first content)]
     (if (map? map-attrs)
       [tag (merge-attributes tag-attrs map-attrs) (next content)]
@@ -80,21 +98,21 @@
       (str "<" tag (render-attr-map attrs) (end-tag)))))
 
 (extend-protocol HtmlRenderer
-  IPersistentVector
+  IVector
   (render-html [this]
     (render-element this))
   ISeq
   (render-html [this]
     (apply str (map render-html this)))
-  Named
+  INamed
   (render-html [this]
     (name this))
-  Object
+  Nil
   (render-html [this]
-    (str this))
-  nil
+    "")
+  IObject
   (render-html [this]
-    ""))
+    (str this)))
 
 (defn- unevaluated?
   "True if the expression has not been evaluated."
@@ -108,7 +126,7 @@
   attributes."
   [attrs]
   (if (some unevaluated? (mapcat identity attrs))
-    `(#'render-attr-map ~attrs)
+    `(render-attr-map ~attrs)
     (render-attr-map attrs)))
 
 (defn- form-name
@@ -134,13 +152,13 @@
 
 (defmethod compile-form :default
   [expr]
-  `(#'render-html ~expr))
+  `(render-html ~expr))
 
 (defn- not-hint?
   "True if x is not hinted to be the supplied type."
   [x type]
   (if-let [hint (-> x meta :tag)]
-    (not (isa? (eval hint) type))))
+    (not (instance? (eval hint) type))))
 
 (defn- hint?
   "True if x is hinted to be the supplied type."
@@ -153,29 +171,29 @@
   [x]
   (and (not (unevaluated? x))
        (or (not (or (vector? x) (map? x)))
-           (every? literal? x))))
+           (every? literal? (seq x)))))
 
 (defn- not-implicit-map?
   "True if we can infer that x is not a map."
   [x]
   (or (= (form-name x) "for")
       (not (unevaluated? x))
-      (not-hint? x java.util.Map)))
+      (not-hint? x PersistentHashMap)))
 
 (defn- element-compile-strategy
   "Returns the compilation strategy to use for a given element."
   [[tag attrs & content :as element]]
   (cond
     (every? literal? element)
-      ::all-literal                    ; e.g. [:span "foo"]
+      :hiccup.compiler/all-literal                    ; e.g. [:span "foo"]
     (and (literal? tag) (map? attrs))
-      ::literal-tag-and-attributes     ; e.g. [:span {} x]
+      :hiccup.compiler/literal-tag-and-attributes     ; e.g. [:span {} x]
     (and (literal? tag) (not-implicit-map? attrs))
-      ::literal-tag-and-no-attributes  ; e.g. [:span ^String x]
+      :hiccup.compiler/literal-tag-and-no-attributes  ; e.g. [:span ^String x]
     (literal? tag)
-      ::literal-tag                    ; e.g. [:span x]
+      :hiccup.compiler/literal-tag                    ; e.g. [:span x]
     :else
-      ::default))                      ; e.g. [x]
+      :hiccup.compiler/default))                      ; e.g. [x]
 
 (declare compile-seq)
 
@@ -185,11 +203,11 @@
   {:private true}
   element-compile-strategy)
 
-(defmethod compile-element ::all-literal
+(defmethod compile-element :hiccup.compiler/all-literal
   [element]
   (render-element (eval element)))
 
-(defmethod compile-element ::literal-tag-and-attributes
+(defmethod compile-element :hiccup.compiler/literal-tag-and-attributes
   [[tag attrs & content]]
   (let [[tag attrs _] (normalize-element [tag attrs])]
     (if (container-tag? tag content)
@@ -198,11 +216,11 @@
             ~(str "</" tag ">"))
       `(str "<" ~tag ~(compile-attr-map attrs) ~(end-tag)))))
 
-(defmethod compile-element ::literal-tag-and-no-attributes
+(defmethod compile-element :hiccup.compiler/literal-tag-and-no-attributes
   [[tag & content]]
   (compile-element (apply vector tag {} content)))
 
-(defmethod compile-element ::literal-tag
+(defmethod compile-element :hiccup.compiler/literal-tag
   [[tag attrs & content]]
   (let [[tag tag-attrs _] (normalize-element [tag])
         attrs-sym         (gensym "attrs")]
@@ -210,11 +228,11 @@
        (if (map? ~attrs-sym)
          ~(if (container-tag? tag content)
             `(str ~(str "<" tag)
-                  (#'render-attr-map (merge ~tag-attrs ~attrs-sym)) ">"
+                  (render-attr-map (merge ~tag-attrs ~attrs-sym)) ">"
                   ~@(compile-seq content)
                   ~(str "</" tag ">"))
             `(str ~(str "<" tag)
-                  (#'render-attr-map (merge ~tag-attrs ~attrs-sym))
+                  (render-attr-map (merge ~tag-attrs ~attrs-sym))
                   ~(end-tag)))
          ~(if (container-tag? tag attrs)
             `(str ~(str "<" tag (render-attr-map tag-attrs) ">")
@@ -224,7 +242,7 @@
 
 (defmethod compile-element :default
   [element]
-  `(#'render-element
+  `(render-element
      [~(first element)
       ~@(for [x (rest element)]
           (if (vector? x)
@@ -234,14 +252,14 @@
 (defn- compile-seq
   "Compile a sequence of data-structures into HTML."
   [content]
-  (doall (for [expr content]
-           (cond
-            (vector? expr) (compile-element expr)
-            (literal? expr) expr
-            (hint? expr String) expr
-            (hint? expr Number) expr
-            (seq? expr) (compile-form expr)
-            :else `(#'render-html ~expr)))))
+  (for [expr content]
+    (cond
+     (vector? expr) (compile-element expr)
+     (literal? expr) expr
+     (hint? expr String) expr
+     (hint? expr Number) expr
+     (seq? expr) (compile-form expr)
+     :else `(render-html ~expr))))
 
 (defn- collapse-strs
   "Collapse nested str expressions into one, where possible."
