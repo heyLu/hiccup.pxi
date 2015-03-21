@@ -1,8 +1,9 @@
 Hiccup
 ======
 
-Hiccup is a library for representing HTML in Pixie. It uses vectors
-to represent elements, and maps to represent an element's attributes.
+Hiccup is a library for representing HTML in [Pixie](https://github.com/pixie-lang/pixie).
+It uses vectors to represent elements, and maps to represent an
+element's attributes.
 
 Install
 -------
