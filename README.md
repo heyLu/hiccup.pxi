@@ -15,7 +15,9 @@ Add the following dependency to your `project.edn` file:
 Documentation
 -------------
 
-**TODO** (For now, refer to the docs on the original hiccup library in
+**TODO**
+
+For now, refer to the docs on the original hiccup library in
 Clojure:
 
 * [Wiki](https://github.com/weavejester/hiccup/wiki)
