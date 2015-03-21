@@ -1,20 +1,21 @@
 Hiccup
 ======
 
-[![Build Status](https://secure.travis-ci.org/weavejester/hiccup.png)](http://travis-ci.org/weavejester/hiccup)
-
-Hiccup is a library for representing HTML in Clojure. It uses vectors
+Hiccup is a library for representing HTML in Pixie. It uses vectors
 to represent elements, and maps to represent an element's attributes.
 
 Install
 -------
 
-Add the following dependency to your `project.clj` file:
+Add the following dependency to your `project.edn` file:
 
-    [hiccup "1.0.5"]
+    [heyLu/hiccup.pxi "0.1.0-alpha"]
 
 Documentation
 -------------
+
+**TODO** (For now, refer to the docs on the original hiccup library in
+Clojure:
 
 * [Wiki](https://github.com/weavejester/hiccup/wiki)
 * [API Docs](http://weavejester.github.com/hiccup)
