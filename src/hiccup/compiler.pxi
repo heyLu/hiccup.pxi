@@ -1,16 +1,24 @@
 (ns hiccup.compiler
   "Internal functions for compilation."
-  (use 'hiccup.util)
-  (require pixie.string :as str))
+  (:require [hiccup.util :refer :all]
+            [pixie.string :as str])
+  )
 
+(defn as-str [n]
+  (if (satisfies? INamed n)
+    (name n)
+    (str n)))
+(def ^:dynamic *html-mode*)
 (def defn- defn)
-(extend -at-end? Nil (fn [_] true))
 
 (defn- xml-mode? []
-  (#{:xml :xhtml} *html-mode*))
+  (#{:xml :xhtml} :xhtml))
 
 (defn- html-mode? []
-  (#{:html :xhtml} *html-mode*))
+  (#{:html :xhtml} 
+           :html
+           ;*html-mode*
+           ))
 
 (defn- end-tag []
   (if (xml-mode?) " />" ">"))
@@ -37,18 +45,21 @@
 ;;        :private true}
 ;;   re-tag #"([^\s\.#]+)(?:#([^\s\.#]+))?(?:\.([^\s#]+))?")
 
-; re-matches re-tag (as-str tag)
+; re-matches re-tag (str tag)
+(defn npos? [n]
+  (when n (pos? n)))
+
 (defn splice-tag
   "Split a tag into id and class if present"
   [tag]
   (let [id-idx (str/index-of tag "#")
         class-idx (str/index-of tag ".")
         [tag id class] (cond
-                        (and (pos? id-idx) (pos? class-idx)) [(str/substring tag 0 id-idx)
+                        (and (npos? id-idx) (npos? class-idx)) [(str/substring tag 0 id-idx)
                                                               (str/substring tag (inc id-idx) class-idx)
                                                               (str/substring tag (inc class-idx))]
-                        (pos? id-idx) [(str/substring tag 0 id-idx) (str/substring tag (inc id-idx)) nil]
-                        (pos? class-idx) [(str/substring tag 0 class-idx) nil (str/substring tag (inc class-idx))]
+                        (npos? id-idx) [(str/substring tag 0 id-idx) (str/substring tag (inc id-idx)) nil]
+                        (npos? class-idx) [(str/substring tag 0 class-idx) nil (str/substring tag (inc class-idx))]
                         :else [tag nil nil])]
     ['_ tag id class]))
 
@@ -164,7 +175,7 @@
   "True if x is hinted to be the supplied type."
   [x type]
   (if-let [hint (-> x meta :tag)]
-    (isa? (eval hint) type)))
+    (instance? (eval hint) type)))
 
 (defn- literal?
   "True if x is a literal value that can be rendered as-is."
