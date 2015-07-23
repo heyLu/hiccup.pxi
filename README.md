@@ -10,7 +10,7 @@ Install
 
 Add the following dependency to your `project.edn` file:
 
-    [heyLu/hiccup.pxi "0.1.0-alpha"]
+    [heyLu/hiccup.pxi "0.1.1-alpha"]
 
 Documentation
 -------------
